@@ -64,3 +64,8 @@ pprof-kill:
 
 pprof:
 	ssh isucon11q "/home/isucon/local/go/bin/go tool pprof webapp/go/isucondition http://localhost:3000/debug/pprof/profile?seconds=30"
+
+show-pprof:
+	$(eval latest := $(shell ssh isucon11q "ls -rt ~/pprof/ | tail -n 1"))
+	scp isucon11q:~/pprof/$(latest) .
+	go tool pprof -http=":8888" ./$(latest);
