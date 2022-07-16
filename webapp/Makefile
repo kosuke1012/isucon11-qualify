@@ -1,12 +1,15 @@
 deploy-app:
-	cd webapp/go;\
-	ssh isucon11q "sudo rm -f /home/isucon/webapp/go/isucondition"
+	cd go;\
+	ssh isucon11q "sudo rm -f /home/isucon/webapp/go/isucondition"; \
 	scp isucondition isucon11q:/home/isucon/webapp/go/
+	cd sql;\
+	ssh isucon11q "sudo rm -f /home/isucon/webapp/sql/0_Schema.sql"; \
+	scp 0_Schema.sql isucon11q:/home/isucon/webapp/sql/	
 	ssh isucon11q "sudo systemctl stop isucondition.go.service"
 	ssh isucon11q "sudo systemctl start isucondition.go.service"
 
 build: 
-	cd webapp/go;\
+	cd go;\
 	GOOS=linux GOARCH=amd64 go build -o isucondition;
 bench-run:
 	ssh isucon11q " \
@@ -14,6 +17,8 @@ bench-run:
 		./bench -all-addresses 127.0.0.11 -target 127.0.0.11:443 -tls -jia-service-url http://127.0.0.1:4999"
 # mysql-deploy:
 # 	ssh isucon11q "sudo dd of=/etc/mysql/mariadb.conf.d/50-server.cnf" < ./etc/mysql/mariadb.conf.d/50-server.cnf
+
+mysql-init: mysql-rotate mysql-restart
 
 mysql-rotate:
 	ssh isucon11q "sudo rm -f /var/log/mysql/mariadb-slow.log"
