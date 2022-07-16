@@ -26,6 +26,7 @@ mysql-rotate:
 mysql-restart:
 	ssh isucon11q "sudo systemctl restart mariadb.service"
 
+nginx-init: nginx-rotate nginx-restart
 nginx-rotate:
 	ssh isucon11q "sudo rm -f /var/log/nginx/access.log"
 
@@ -56,10 +57,10 @@ ALPM="/posts/[0-9]+,/posts?.+,/@.+,/image/[0-9]+"
 OUTFORMAT=count,method,uri,min,max,sum,avg,p99
 
 alp:
-	ssh private-isu "sudo alp ltsv --file=/var/log/nginx/access.log --nosave-pos --pos /tmp/alp.pos --sort $(ALPSORT) --reverse -o $(OUTFORMAT) -m $(ALPM) -q"
+	alp ltsv --file=my_access.log --nosave-pos --pos /tmp/alp.pos --sort $(ALPSORT) --reverse -o $(OUTFORMAT) -m $(ALPM) -q
 
 pprof-kill:
 	ssh private-isu "pgrep -f 'pprof' | xargs kill;"
 
 pprof:
-	ssh private-isu "/home/isucon/local/go/bin/go tool pprof -http=0.0.0.0:1080 webapp/go/isucondition http://localhost:6060/debug/pprof/profile?seconds=75"
+	ssh isucon11q "/home/isucon/local/go/bin/go tool pprof webapp/go/isucondition http://localhost:3000/debug/pprof/profile?seconds=30"
