@@ -53,7 +53,7 @@ download-accesslog:
 	ssh isucon11q "sudo rm -f ~/my_access.log";
 
 ALPSORT=sum
-ALPM="/posts/[0-9]+,/posts?.+,/@.+,/image/[0-9]+"
+ALPM="/isu/[0-9a-f-]+/graph,/isu/[0-9a-f-]+,/api/condition/[0-9a-f-]+,/api/isu/[0-9a-f-]+/icon,/api/isu/[0-9a-f-]+,/?jwt=+,/isu/[0-9a-f-]+/condition"
 OUTFORMAT=count,method,uri,min,max,sum,avg,p99
 
 alp:
