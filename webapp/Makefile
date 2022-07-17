@@ -20,8 +20,8 @@ bench-run:
 
 
 rm-logs:
-	rm my_slow.log
-	rm my_access.log
+	rm -f my_slow.log
+	rm -f my_access.log
 
 init: rm-logs mysql-init nginx-init
 
@@ -43,7 +43,7 @@ nginx-reload:
 nginx-restart:
 	ssh isucon11q "sudo systemctl restart nginx.service"
 
-
+download-logs: download-slowlog download-accesslog
 download-slowlog:
 	ssh isucon11q "sudo cp /var/log/mysql/mariadb-slow.log my_slow.log";	
 	ssh isucon11q "sudo chown isucon:isucon ~/my_slow.log";	
