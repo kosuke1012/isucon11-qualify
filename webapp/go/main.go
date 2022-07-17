@@ -341,6 +341,58 @@ func postInitialize(c echo.Context) error {
 		c.Logger().Errorf("db error : %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
+	type mcInitVarRes struct {
+		Id        int       `db:"id"`
+		Timestamp time.Time `db:"timestamp"`
+		Condition string    `db:"condition"`
+	}
+	var dbRes []mcInitVarRes
+
+	err = db.Select(&dbRes, `
+	SELECT
+		ic2.id,
+		ic.timestamp,
+		ic.condition
+	FROM
+	isu_condition ic
+	JOIN (
+		SELECT
+			i.id,
+			max(c.timestamp) maxts,
+			i.jia_isu_uuid
+		FROM
+			isu_condition c
+			JOIN isu i ON c.jia_isu_uuid = i.jia_isu_uuid
+		GROUP BY
+			i.id,
+			i.jia_isu_uuid) ic2 ON ic.timestamp = ic2.maxts
+	AND ic.jia_isu_uuid = ic2.jia_isu_uuid
+	`)
+	if err != nil {
+		c.Logger().Errorf("db error : %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	for _, r := range dbRes {
+		cond, err := calculateConditionLevel(r.Condition)
+		if err != nil {
+			c.Logger().Errorf("mc init error : %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		item := mcIsuValue{
+			Condition: cond,
+			Timestamp: r.Timestamp,
+		}
+		b, err := json.Marshal(item)
+		if err != nil {
+			c.Logger().Errorf("mc init error : %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		err = mc.Set(&memcache.Item{Key: fmt.Sprint(r.Id), Value: b})
+		if err != nil {
+			c.Logger().Errorf("mc init error : %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+	}
 
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "go",
@@ -1280,6 +1332,19 @@ func postIsuCondition(c echo.Context) error {
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
+	}
+	mcItem, err := mc.Get(fmt.Sprint(isuID))
+	if err == nil {
+		var mcVal mcIsuValue
+		err = json.Unmarshal(mcItem.Value, &mcVal)
+		if err != nil {
+			c.Logger().Errorf("mc marshal error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		if mcVal.Timestamp.After(bulk[0].Timestamp) {
+			// キャッシュ更新不要
+			return c.NoContent(http.StatusAccepted)
+		}
 	}
 
 	mv := mcIsuValue{
