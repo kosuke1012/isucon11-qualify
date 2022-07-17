@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
@@ -51,6 +52,7 @@ var (
 	jiaJWTSigningKey *ecdsa.PublicKey
 
 	postIsuConditionTargetBaseURL string // JIAへのactivate時に登録する，ISUがconditionを送る先のURL
+	mc                            *memcache.Client
 )
 
 type Config struct {
@@ -196,6 +198,7 @@ func (mc *MySQLConnectionEnv) ConnectDB() (*sqlx.DB, error) {
 
 func init() {
 	sessionStore = sessions.NewCookieStore([]byte(getEnv("SESSION_KEY", "isucondition")))
+	mc = memcache.New("localhost:11211")
 
 	key, err := ioutil.ReadFile(jiaJWTSigningKeyPath)
 	if err != nil {
@@ -1163,6 +1166,11 @@ func getTrend(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
+type mcIsuValue struct {
+	Condition string    `json:"condition"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
 // POST /api/condition/:jia_isu_uuid
 // ISUからのコンディションを受け取る
 func postIsuCondition(c echo.Context) error {
@@ -1186,15 +1194,21 @@ func postIsuCondition(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "bad request body")
 	}
 
-	var count int
-	err = db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	type idCntSet struct {
+		Id  int `db:"id"`
+		Cnt int `db:"cnt"`
+	}
+	var idCnt []idCntSet
+
+	err = db.Select(&idCnt, "SELECT id, count(*) cnt FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
-	if count == 0 {
+	if idCnt[0].Cnt == 0 {
 		return c.String(http.StatusNotFound, "not found: isu")
 	}
+	isuID := idCnt[0].Id
 	type bulkInsertIsuCondition struct {
 		JIAIsuUUID string    `db:"jia_isu_uuid"`
 		Timestamp  time.Time `db:"timestamp"`
@@ -1239,10 +1253,26 @@ func postIsuCondition(c echo.Context) error {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
+
+	sort.Slice(bulk, func(i, j int) bool {
+		return bulk[i].Timestamp.After(bulk[j].Timestamp)
+	})
+	condLevel, err := calculateConditionLevel(bulk[0].Condition)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
+
+	mv := mcIsuValue{
+		Condition: condLevel,
+		Timestamp: bulk[0].Timestamp,
+	}
+	b, err := json.Marshal(mv)
+	if err != nil {
+		c.Logger().Errorf("db error: %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	mc.Set(&memcache.Item{Key: fmt.Sprint(isuID), Value: b})
 
 	return c.NoContent(http.StatusAccepted)
 }
