@@ -18,6 +18,13 @@ bench-run:
 # mysql-deploy:
 # 	ssh isucon11q "sudo dd of=/etc/mysql/mariadb.conf.d/50-server.cnf" < ./etc/mysql/mariadb.conf.d/50-server.cnf
 
+
+rm-logs:
+	rm my_slow.log
+	rm my_access.log
+
+init: rm-logs mysql-init nginx-init
+
 mysql-init: mysql-rotate mysql-restart
 
 mysql-rotate:
