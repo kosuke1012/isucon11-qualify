@@ -1113,6 +1113,29 @@ func getTrend(c echo.Context) error {
 		characterCriticalIsuConditions := []*TrendCondition{}
 		for _, isu := range isuList {
 			conditions := []IsuCondition{}
+			mcItem, err := mc.Get(fmt.Sprint(isu.ID))
+			if err == nil {
+				var mcVal mcIsuValue
+				err = json.Unmarshal(mcItem.Value, &mcVal)
+				if err != nil {
+					c.Logger().Errorf("mc marshal error: %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+				trendCondition := TrendCondition{
+					ID:        isu.ID,
+					Timestamp: mcVal.Timestamp.Unix(),
+				}
+				switch mcVal.Condition {
+				case "info":
+					characterInfoIsuConditions = append(characterInfoIsuConditions, &trendCondition)
+				case "warning":
+					characterWarningIsuConditions = append(characterWarningIsuConditions, &trendCondition)
+				case "critical":
+					characterCriticalIsuConditions = append(characterCriticalIsuConditions, &trendCondition)
+				}
+				continue
+			}
+
 			err = db.Select(&conditions,
 				"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY timestamp DESC LIMIT 1",
 				isu.JIAIsuUUID,
@@ -1194,21 +1217,17 @@ func postIsuCondition(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "bad request body")
 	}
 
-	type idCntSet struct {
-		Id  int `db:"id"`
-		Cnt int `db:"cnt"`
-	}
-	var idCnt []idCntSet
+	var idRes []int
 
-	err = db.Select(&idCnt, "SELECT id, count(*) cnt FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
-	if err != nil {
+	err = db.Select(&idRes, "SELECT id FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	if err != nil && err != sql.ErrNoRows {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
-	if idCnt[0].Cnt == 0 {
+	if len(idRes) == 0 {
 		return c.String(http.StatusNotFound, "not found: isu")
 	}
-	isuID := idCnt[0].Id
+	isuID := idRes[0]
 	type bulkInsertIsuCondition struct {
 		JIAIsuUUID string    `db:"jia_isu_uuid"`
 		Timestamp  time.Time `db:"timestamp"`
@@ -1272,7 +1291,10 @@ func postIsuCondition(c echo.Context) error {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
-	mc.Set(&memcache.Item{Key: fmt.Sprint(isuID), Value: b})
+	err = mc.Set(&memcache.Item{Key: fmt.Sprint(isuID), Value: b})
+	if err != nil {
+		c.Logger().Errorf("memcache set err: %v", err)
+	}
 
 	return c.NoContent(http.StatusAccepted)
 }
