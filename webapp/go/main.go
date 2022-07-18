@@ -287,15 +287,9 @@ func getUserIDFromSession(c echo.Context) (string, int, error) {
 	}
 
 	jiaUserID := _jiaUserID.(string)
-	var count int
 
-	err = db.Get(&count, "SELECT COUNT(*) FROM `user` WHERE `jia_user_id` = ?",
-		jiaUserID)
-	if err != nil {
-		return "", http.StatusInternalServerError, fmt.Errorf("db error: %v", err)
-	}
-
-	if count == 0 {
+	_, err = mc.Get(mcUserKey(jiaUserID))
+	if err == memcache.ErrCacheMiss {
 		return "", http.StatusUnauthorized, fmt.Errorf("not found: user")
 	}
 
@@ -394,9 +388,29 @@ func postInitialize(c echo.Context) error {
 		}
 	}
 
+	type userID struct {
+		JiaUserID string `db:"jia_user_id" json:"jia_user_id"`
+	}
+	var userRes []userID
+
+	err = db.Select(&userRes, `
+	SELECT jia_user_id FROM user
+	`)
+	if err != nil {
+		c.Logger().Errorf("user init error : %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	for _, r := range userRes {
+		mc.Set(&memcache.Item{Key: mcUserKey(r.JiaUserID)})
+	}
+
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "go",
 	})
+}
+
+func mcUserKey(id string) string {
+	return fmt.Sprintf("user-%s", id)
 }
 
 // POST /api/auth
@@ -435,6 +449,7 @@ func postAuthentication(c echo.Context) error {
 	}
 
 	_, err = db.Exec("INSERT IGNORE INTO user (`jia_user_id`) VALUES (?)", jiaUserID)
+	mc.Set(&memcache.Item{Key: mcUserKey(jiaUserID)})
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
