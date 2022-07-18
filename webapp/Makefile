@@ -5,10 +5,13 @@ deploy-app:
 	cd sql;\
 	ssh isucon11q "sudo rm -f /home/isucon/webapp/sql/0_Schema.sql"; \
 	scp 0_Schema.sql isucon11q:/home/isucon/webapp/sql/	
+	cd sql;\
+	ssh isucon11q "sudo rm -f /home/isucon/webapp/sql/2_GenerateColumn.sql"; \
+	scp 2_GenerateColumn.sql isucon11q:/home/isucon/webapp/sql/
 	ssh isucon11q "sudo systemctl stop isucondition.go.service"
 	ssh isucon11q "sudo systemctl start isucondition.go.service"
 
-build: 
+build:
 	cd go;\
 	GOOS=linux GOARCH=amd64 go build -o isucondition;
 bench-run:
