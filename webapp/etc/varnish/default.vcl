@@ -15,7 +15,7 @@ vcl 4.0;
 # Default backend definition. Set this to point to your content server.
 backend default {
     .host = "127.0.0.1";
-    .port = "8080";
+    .port = "3000";
 }
 
 sub vcl_recv {
@@ -23,6 +23,9 @@ sub vcl_recv {
     #
     # Typically you clean up the request here, removing cookies you don't need,
     # rewriting the request, etc.
+    if (req.url ~ "^/api/trend") {
+        unset req.http.cookie;
+    }
 }
 
 sub vcl_backend_response {
@@ -30,6 +33,8 @@ sub vcl_backend_response {
     #
     # Here you clean the response headers, removing silly Set-Cookie headers
     # and other mistakes your backend does.
+    set beresp.ttl = 0.8s;
+    set beresp.grace = 0.2s;
 }
 
 sub vcl_deliver {

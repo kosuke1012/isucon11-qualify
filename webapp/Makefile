@@ -36,7 +36,7 @@ mysql-rotate:
 mysql-restart:
 	ssh isucon11q "sudo systemctl restart mariadb.service"
 
-nginx-init: nginx-rotate nginx-restart
+nginx-init: nginx-rotate nginx-restart varnish-restart
 nginx-rotate:
 	ssh isucon11q "sudo rm -f /var/log/nginx/access.log"
 
@@ -52,6 +52,9 @@ download-slowlog:
 	ssh isucon11q "sudo chown isucon:isucon ~/my_slow.log";	
 	scp isucon11q:~/my_slow.log .
 	ssh isucon11q "sudo rm -f ~/my_slow.log";	
+
+varnish-restart:
+	ssh isucon11q "sudo systemctl restart varnish"
 
 ptq:
 	pt-query-digest my_slow.log
