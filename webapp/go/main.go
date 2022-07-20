@@ -381,7 +381,7 @@ func postInitialize(c echo.Context) error {
 			c.Logger().Errorf("mc init error : %v", err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
-		err = mc.Set(&memcache.Item{Key: fmt.Sprint(r.Id), Value: b})
+		err = mc.Set(&memcache.Item{Key: fmt.Sprint(r.Id), Value: b, Expiration: 10})
 		if err != nil {
 			c.Logger().Errorf("mc init error : %v", err)
 			return c.NoContent(http.StatusInternalServerError)
@@ -1372,7 +1372,7 @@ func postIsuCondition(c echo.Context) error {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
-	err = mc.Set(&memcache.Item{Key: fmt.Sprint(isuID), Value: b})
+	err = mc.Set(&memcache.Item{Key: fmt.Sprint(isuID), Value: b, Expiration: 10})
 	if err != nil {
 		c.Logger().Errorf("memcache set err: %v", err)
 	}
